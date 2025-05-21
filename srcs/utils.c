@@ -3,7 +3,7 @@
 
 void print_help()
 {
-    printf("Usage: ./fbecho <option>\n");
+    printf("Usage: ./fbtools <option>\n");
     printf("Option available: \n"); 
     printf("\t-h : print this message.\n"); 
     printf("\t-i : print screen information.\n"); 

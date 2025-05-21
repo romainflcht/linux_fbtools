@@ -3,9 +3,10 @@
 #define _COLOR_H_
 
 #include <stdint.h>
+#include <stdint.h>
 
 
-/* 16b color RGB 565 */
+// 16 bits color RGB 565
 #define BLACK  0x0000
 #define DRED   0x7800
 #define DGREE  0x03E0
@@ -23,8 +24,8 @@
 #define GREY   0x7BEF
 #define WHITE  0xFFFF
 
-// * _ TYPES DEFINITIONS _______________________________________________________
-typedef uint16_t COLOR_t; 
+// * _ DEFINITIONS _____________________________________________________________
+#define COLOR_t uint16_t 
 
 // * _ FUNCTIONS _______________________________________________________________
 unsigned short palette(int c); 

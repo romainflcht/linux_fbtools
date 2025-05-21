@@ -79,7 +79,7 @@ void display_info(FRAMEBUFFER_t* fb)
 // * @param: *fb: the structure to initialize. 
 void fill_screen(FRAMEBUFFER_t* fb, COLOR_t color)
 {
-    unsigned int i; 
+    uint_t i; 
 
     i = 0; 
     while (i < fb->vinfo.xres * fb->vinfo.yres)
@@ -95,8 +95,7 @@ void fill_screen(FRAMEBUFFER_t* fb, COLOR_t color)
 // * @param: x    : x location of the pixel. 
 // * @param: y    : y location of the pixel. 
 // * @param: color: color of the pixel. 
-void draw_pixel(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y, 
-                COLOR_t color)
+void draw_pixel(FRAMEBUFFER_t* fb, uint_t x, uint_t y, COLOR_t color)
 {
     // Check x and y boundary. 
     if (x > fb->vinfo.xres)
@@ -116,7 +115,7 @@ void draw_pixel(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y,
 // * @param: x  : x location of the pixel. 
 // * @param: y  : y location of the pixel. 
 // * @return: the color value of the pixel. 
-COLOR_t get_pixel_color(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y)
+COLOR_t get_pixel_color(FRAMEBUFFER_t* fb, uint_t x, uint_t y)
 {
     if (x > fb->vinfo.xres)
         return -1; 
@@ -134,7 +133,7 @@ COLOR_t get_pixel_color(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y)
 // * @param: y      : y position where to the draw the char. 
 // * @param: fgcolor: color of the letter. 
 // * @param: bgcolor: color of the background of the char. 
-void draw_char(FRAMEBUFFER_t* fb, char c, unsigned int x, unsigned int y, 
+void print_char_coord(FRAMEBUFFER_t* fb, char c, uint_t x, uint_t y, 
                COLOR_t fgcolor, COLOR_t bgcolor)
 {
     unsigned char* char_addr; 
@@ -179,45 +178,87 @@ void draw_char(FRAMEBUFFER_t* fb, char c, unsigned int x, unsigned int y,
 // * @param: col    : column index position where to draw the char. 
 // * @param: fgcolor: color of the letter. 
 // * @param: bgcolor: color of the background of the char. 
-void draw_aligned_char(FRAMEBUFFER_t* fb, char c, unsigned int* row, 
-                       unsigned int* col, COLOR_t fgcolor, COLOR_t bgcolor)
+void print_char_grid(FRAMEBUFFER_t* fb, char c, uint_t row, uint_t col, 
+                COLOR_t fgcolor, COLOR_t bgcolor)
 {
-    unsigned char* char_addr; 
-    unsigned char current_byte; 
-    int i; 
-    int j; 
     int x; 
     int y; 
 
-    x = *row * ISO_CHAR_WIDTH; 
-    y = *col * ISO_CHAR_HEIGHT; 
+    x = row * ISO_CHAR_WIDTH; 
+    y = col * ISO_CHAR_HEIGHT; 
 
-    // Get the address of the first byte of the character. 
-    char_addr = ISO_FONT + (c * ISO_CHAR_HEIGHT); 
+    print_char_coord(fb, c, x, y, fgcolor, bgcolor); 
+    return; 
+}
 
-    for (i = 0; i < ISO_CHAR_HEIGHT; i++)
+
+// * Put a char on the screen at global cursor position. 
+// * @param: c      : the char to draw. 
+// * @param: fgcolor: color of the letter. 
+// * @param: bgcolor: color of the background of the char. 
+void put_char(FRAMEBUFFER_t* fb, char c, COLOR_t fgcolor, COLOR_t bgcolor)
+{
+    int x; 
+    int y; 
+
+    x = NOC * ISO_CHAR_WIDTH; 
+    y = NOR * ISO_CHAR_HEIGHT; 
+
+    // 
+    if (c != '\n')
+        print_char_coord(fb, c, x, y, fgcolor, bgcolor); 
+
+    else
     {
-    // Get the first byte value of the character (the first line). 
-    current_byte = *char_addr;
-
-        for (j = 0; j < ISO_CHAR_WIDTH; j++)
-        {
-            // Check each bits of the bytes and draw a pixel according to zeros 
-            // and ones. 
-            if (current_byte & 0x01)
-                draw_pixel(fb, x + j, y + i, fgcolor); 
-            
-            else
-                draw_pixel(fb, x + j, y + i, bgcolor); 
-            
-                // Offset the byte by one to see the next bit. 
-                current_byte = current_byte >> 1; 
-        }
-
-        // Increment the address to get all 16 lines. 
-       char_addr++; 
+        NOC = 0; 
+        NOR += 1; 
     }
 
+    // Increment the cursor position one char to the right. 
+    NOC++; 
+    if (NOC >= (fb->vinfo.xres / ISO_CHAR_WIDTH))
+    {
+        // If off screen on the right, reset the row position and increment 
+        // the col position. 
+        NOC = 0; 
+        NOR++; 
+    }
+
+    if (NOR >= (fb->vinfo.yres / ISO_CHAR_HEIGHT))
+    {
+        // If off screen at the bottom, set cursor position one line higher and
+        // scroll the screen. 
+        NOR--;
+        scroll_screen(fb); 
+    }
+
+    return; 
+}
+
+
+// * Copy the screen to offset it by one char height, creating a scrolling. 
+// * @param: fb: FRAMEBUFFER_t where the screen will be scrolled.  
+void scroll_screen(FRAMEBUFFER_t* fb)
+{
+    void* scroll_rect; 
+    int max_x; 
+    int max_y; 
+
+    max_x = fb->vinfo.xres; 
+    max_y = fb->vinfo.yres; 
+
+    // Copy and write the screen one char width to the top. 
+    scroll_rect = copy_rect(fb, 0, ISO_CHAR_HEIGHT, max_x, max_y); 
+    if (!scroll_rect)
+        return; 
+
+    write_rect(fb, scroll_rect, 0, 0); 
+
+    // Clear the last char line at the bottom of the screen. 
+    draw_rect(fb, 0, max_y - ISO_CHAR_HEIGHT, max_y, ISO_CHAR_HEIGHT, BLACK); 
+    
+    // Free ressources. 
+    RECT_CP_free(scroll_rect); 
     return; 
 }
 
@@ -227,12 +268,12 @@ void draw_aligned_char(FRAMEBUFFER_t* fb, char c, unsigned int* row,
 // * @param: x    : x position the draw the char. 
 // * @param: y    : y position the draw the char. 
 // * @param: color: color of the pixel. 
-void draw_string(FRAMEBUFFER_t* fb, char* str, unsigned int x, unsigned int y,
+void print_str_coord(FRAMEBUFFER_t* fb, char* str, uint_t x, uint_t y,
                  COLOR_t fgcolor, COLOR_t bgcolor)
 {
     int i;
-    unsigned int row; 
-    unsigned int line; 
+    uint_t row; 
+    uint_t line; 
 
     // Check if str in sot empty, x and y boundary. 
     if (!str)
@@ -252,7 +293,7 @@ void draw_string(FRAMEBUFFER_t* fb, char* str, unsigned int x, unsigned int y,
     i = 0; 
     while (str[i])
     {
-        draw_char(fb, str[i], row, line, fgcolor, bgcolor); 
+        print_char_coord(fb, str[i], row, line, fgcolor, bgcolor); 
 
         row += ISO_CHAR_WIDTH; 
 
@@ -267,6 +308,26 @@ void draw_string(FRAMEBUFFER_t* fb, char* str, unsigned int x, unsigned int y,
 }
 
 
+
+// * Put a string on the screen at global cursor position. 
+// * @param: c      : the char to draw. 
+// * @param: fgcolor: color of the letter. 
+// * @param: bgcolor: color of the background of the char. 
+void put_text(FRAMEBUFFER_t* fb, char* str, COLOR_t fgcolor, COLOR_t bgcolor)
+{
+    int i; 
+
+    // Put a char until the we meet a '\0'. 
+    i = 0; 
+    while (str[i])
+    {
+        put_char(fb, str[i], fgcolor, bgcolor); 
+        i++; 
+    }    
+    
+    return; 
+}
+
 // * Copy a rectangle of pixel from the screen into a buffer. 
 // * @param: *fb: The framebuffer where the area will be copied. 
 // * @param: x0 : x coordinate of the top-left corner of the copied area. 
@@ -274,18 +335,18 @@ void draw_string(FRAMEBUFFER_t* fb, char* str, unsigned int x, unsigned int y,
 // * @param: x1 : x coordinate of the bottom-right corner of the copied area.
 // * @param: y1 : y coordinate of the bottom-right corner of the copied area.
 // * @return: The pointer to the buffer containing the screen data copied. 
-void* copy_rect(FRAMEBUFFER_t* fb, unsigned int x0, unsigned int y0, 
-                unsigned int x1, unsigned int y1)
+void* copy_rect(FRAMEBUFFER_t* fb, uint_t x0, uint_t y0, 
+                uint_t x1, uint_t y1)
 {
     RECT_CP_t* cp; 
-    unsigned int x; 
-    unsigned int y; 
+    uint_t x; 
+    uint_t y; 
     
     // Allocate space for the RECT_CT_t structure that hold size info and the 
     // buffer itself. 
     cp = malloc(sizeof(RECT_CP_t)); 
     if (!cp)
-    return NULL; 
+        return NULL; 
     
     // Initialise all the size of the buffer. 
     cp->w = x1 - x0; 
@@ -312,12 +373,12 @@ void* copy_rect(FRAMEBUFFER_t* fb, unsigned int x0, unsigned int y0,
 
 
 // * Free the RECT_CP_t structure created in copy_rect function. 
-// * @param: *cp: The structure that will be freed.  
+// * @param: *cp: The structure that will be freed. 
 void RECT_CP_free(RECT_CP_t* cp)
 {
     if (!cp)
         return; 
-        
+
     if (cp->buf)
     {
         free(cp->buf); 
@@ -336,11 +397,11 @@ void RECT_CP_free(RECT_CP_t* cp)
 // *              drawn. 
 // * @param: y  : y coordinate of the top-left corner where the copy will be 
 // *              drawn. 
-void write_rect(FRAMEBUFFER_t* fb, void* buf, unsigned int x, unsigned int y)
+void write_rect(FRAMEBUFFER_t* fb, void* buf, uint_t x, uint_t y)
 {
     RECT_CP_t* cp; 
-    unsigned int i; 
-    unsigned int j; 
+    uint_t i; 
+    uint_t j; 
 
     // Cast the void buffer. 
     cp = (RECT_CP_t*)buf; 
@@ -369,15 +430,15 @@ void write_rect(FRAMEBUFFER_t* fb, void* buf, unsigned int x, unsigned int y)
 // * @param: y    : y coordinate of the top-left corner where the copy will be 
 // *                drawn. 
 // * @param: alpha: the value of transparency we want to apply (0 to 255). 
-void write_rect_alpha(FRAMEBUFFER_t* fb, void* buf, unsigned int x, 
-                      unsigned int y, uint8_t alpha)
+void write_rect_alpha(FRAMEBUFFER_t* fb, void* buf, uint_t x, 
+                      uint_t y, uint8_t alpha)
 {
     RECT_CP_t*      cp; 
     COLOR_t         src; 
     COLOR_t         dst; 
     COLOR_t         blended; 
-    unsigned int    i; 
-    unsigned int    j; 
+    uint_t    i; 
+    uint_t    j; 
 
     // Cast the void buffer. 
     cp = (RECT_CP_t*)buf; 
@@ -409,10 +470,10 @@ void write_rect_alpha(FRAMEBUFFER_t* fb, void* buf, unsigned int x,
 // * @param: y    : start y coordinate. 
 // * @param: w    : width of the line. 
 // * @param: color: color of the line. 
-void draw_h_line(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y, 
-    unsigned int w, COLOR_t color)
+void draw_h_line(FRAMEBUFFER_t* fb, uint_t x, uint_t y, 
+    uint_t w, COLOR_t color)
 {
-    unsigned int i; 
+    uint_t i; 
 
     for (i = 0; i < w; i++)
         draw_pixel(fb, x + i, y, color); 
@@ -427,10 +488,10 @@ void draw_h_line(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y,
 // * @param: y    : start y coordinate. 
 // * @param: h    : height of the line. 
 // * @param: color: color of the line. 
-void draw_v_line(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y, 
-    unsigned int h, COLOR_t color)
+void draw_v_line(FRAMEBUFFER_t* fb, uint_t x, uint_t y, 
+    uint_t h, COLOR_t color)
 {
-    unsigned int i; 
+    uint_t i; 
 
     for (i = 0; i < h; i++)
         draw_pixel(fb, x, y + i, color); 
@@ -446,14 +507,14 @@ void draw_v_line(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y,
 // * @param: x1   : end x coordinate.
 // * @param: y1   : end y coordinate.
 // * @param: color: color of the line. 
-void draw_line(FRAMEBUFFER_t* fb, unsigned int x0, unsigned int y0, 
-               unsigned int x1, unsigned int y1, COLOR_t color)
+void draw_line(FRAMEBUFFER_t* fb, uint_t x0, uint_t y0, 
+               uint_t x1, uint_t y1, COLOR_t color)
 {
-    unsigned int dx; 
-    unsigned int dy; 
-    unsigned int d; 
-    unsigned int y; 
-    unsigned int x; 
+    uint_t dx; 
+    uint_t dy; 
+    uint_t d; 
+    uint_t y; 
+    uint_t x; 
 
     dx = x1 - x0; 
     dy = y1 - y0; 
@@ -485,10 +546,10 @@ void draw_line(FRAMEBUFFER_t* fb, unsigned int x0, unsigned int y0,
 // * @param: w    : width of the rectangle.
 // * @param: h    : height of the rectangle. 
 // * @param: color: color of the rectangle. 
-void draw_rect(FRAMEBUFFER_t* fb, unsigned int x, unsigned int y, 
-               unsigned int w, unsigned int h, COLOR_t color)
+void draw_rect(FRAMEBUFFER_t* fb, uint_t x, uint_t y, 
+               uint_t w, uint_t h, COLOR_t color)
 {
-    unsigned int i; 
+    uint_t i; 
 
     // Draw horizontal line for the height of the rectangle. 
     for (i = 0; i < h; i++)

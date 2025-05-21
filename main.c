@@ -7,28 +7,36 @@
 
 #define FB_INTERFACE "/dev/fb0"
 
+// Cursor row and col coordinates. 
+uint_t NOR; 
+uint_t NOC; 
+
 
 int main(void)
 {
 
     FRAMEBUFFER_t display; 
-    RECT_CP_t* buf; 
     int retval; 
 
     retval = init_framebuffer(&display, FB_INTERFACE); 
     if (retval)
         return 1; 
-        
     
-    buf = copy_rect(&display, 0, 0, 100, 100); 
+    
+    NOR = (display.vinfo.yres / ISO_CHAR_HEIGHT) - 1; 
+    NOC = 0; 
 
-    int i; 
-    for (i = 0; i < 100; i += 10)
-        write_rect_alpha(&display, buf, i, i, 127); 
+    fill_screen(&display, BLACK); 
 
+    // put_text(&display, "printing text test: \nLorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse tincidunt risus neque, in pretium ante condimentum id. Nunc gravida semper purus, in commodo velit volutpat eget\n", WHITE, BLACK); 
+    sleep(3); 
 
-    RECT_CP_free(buf); 
+    draw_piet_mondrian(&display); 
+    sleep(3); 
+
+    fill_screen(&display, BLACK); 
+    put_text(&display, "bye :)", WHITE, BLACK); 
+
     free_framebuffer(&display); 
-
     return 0; 
 }
